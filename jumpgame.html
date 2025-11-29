@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Cube Jumper</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      color-scheme: light dark;
+    }
+    html, body {
+      height: 100%;
+    }
+    body {
+      margin: 0;
+      display: grid;
+      place-items: center;
+      background: #1a1f2b;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      color: #e8eef8;
+    }
+    .wrap {
+      text-align: center;
+    }
+    canvas {
+      background: linear-gradient(#283044, #1a1f2b 60%);
+      border: 2px solid #3c4761;
+      border-radius: 10px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+    }
+    .hud {
+      margin-top: 10px;
+      opacity: 0.9;
+      font-size: 14px;
+    }
+    .btn {
+      display: inline-block;
+      margin-top: 8px;
+      padding: 6px 10px;
+      background: #3c8cff;
+      color: white;
+      border-radius: 6px;
+      cursor: pointer;
+      user-select: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <canvas id="game" width="640" height="360" aria-label="Cube Jumper"></canvas>
+    <div class="hud">
+      Press Space/↑ to jump. Press R to restart. Avoid the obstacles!
+      <div class="btn" id="restartBtn" role="button">Restart</div>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const canvas = document.getElementById('game');
+      const ctx = canvas.getContext('2d');
+
+      // World settings
+      const W = canvas.width;
+      const H = canvas.height;
+      const groundY = H - 60;
+      const gravity = 0.9;
+      const jumpVel = -14;
+      const obstacleSpeedStart = 5;
+      const obstacleGapMin = 260;
+      const obstacleGapMax = 420;
+
+      // Player
+      const player = {
+        x: 80,
+        y: groundY - 30,
+        w: 30,
+        h: 30,
+        vy: 0,
+        onGround: true,
+        color: '#5ee38a'
+      };
+
+      // Obstacles
+      let obstacles = [];
+      let obstacleSpeed = obstacleSpeedStart;
+
+      // Game state
+      let score = 0;
+      let highScore = Number(localStorage.getItem('cubeJumperHighScore') || 0);
+      let gameOver = false;
+      let frame = 0;
+
+      // Input
+      let wantsJump = false;
+
+      function resetGame() {
+        score = 0;
+        gameOver = false;
+        frame = 0;
+        obstacleSpeed = obstacleSpeedStart;
+        player.y = groundY - player.h;
+        player.vy = 0;
+        player.onGround = true;
+        obstacles = [];
+        // Spawn initial obstacles
+        let x = W + 120;
+        for (let i = 0; i < 3; i++) {
+          const w = 30 + Math.random() * 40;
+          const h = 30 + Math.random() * 40;
+          obstacles.push({ x, y: groundY - h, w, h, color: '#ff6b6b' });
+          x += randomRange(obstacleGapMin, obstacleGapMax);
+        }
+      }
+
+      function randomRange(min, max) {
+        return Math.floor(min + Math.random() * (max - min));
+      }
+
+      function spawnObstacle(lastX) {
+        const w = 28 + Math.random() * 50;
+        const h = 24 + Math.random() * 60;
+        const gap = randomRange(obstacleGapMin, obstacleGapMax);
+        return { x: lastX + gap, y: groundY - h, w, h, color: '#ff6b6b' };
+      }
+
+      function update() {
+        if (gameOver) return;
+
+        frame++;
+
+        // Difficulty ramp
+        obstacleSpeed += 0.0009; // small acceleration over time
+
+        // Jump input
+        if (wantsJump && player.onGround) {
+          player.vy = jumpVel;
+          player.onGround = false;
+        }
+        wantsJump = false; // consume input
+
+        // Physics
+        player.vy += gravity;
+        player.y += player.vy;
+
+        // Ground collision
+        if (player.y + player.h >= groundY) {
+          player.y = groundY - player.h;
+          player.vy = 0;
+          player.onGround = true;
+        }
+
+        // Obstacles move
+        for (const ob of obstacles) {
+          ob.x -= obstacleSpeed;
+        }
+
+        // Recycle obstacles and score
+        if (obstacles.length) {
+          const first = obstacles[0];
+          if (first.x + first.w < 0) {
+            obstacles.shift();
+          }
+          const lastX = obstacles[obstacles.length - 1].x;
+          if (W - lastX > 0) {
+            obstacles.push(spawnObstacle(lastX));
+          }
+        }
+
+        // Collision detection
+        for (const ob of obstacles) {
+          if (rectsOverlap(player, ob)) {
+            endGame();
+            break;
+          }
+          // Score when passed center of obstacle once
+          if (!ob.scored && player.x > ob.x + ob.w) {
+            ob.scored = true;
+            score++;
+            // Slight reward speed bump
+            obstacleSpeed += 0.03;
+          }
+        }
+      }
+
+      function rectsOverlap(a, b) {
+        return (
+          a.x < b.x + b.w &&
+          a.x + a.w > b.x &&
+          a.y < b.y + b.h &&
+          a.y + a.h > b.y
+        );
+      }
+
+      function endGame() {
+        gameOver = true;
+        highScore = Math.max(highScore, score);
+        localStorage.setItem('cubeJumperHighScore', String(highScore));
+      }
+
+      function draw() {
+        // Clear background
+        ctx.clearRect(0, 0, W, H);
+
+        // Parallax sky
+        drawSky();
+
+        // Ground
+        ctx.fillStyle = '#2a3347';
+        ctx.fillRect(0, groundY, W, H - groundY);
+
+        // Track line
+        ctx.fillStyle = '#3c4761';
+        ctx.fillRect(0, groundY - 2, W, 2);
+
+        // Player
+        ctx.fillStyle = player.color;
+        ctx.fillRect(player.x, player.y, player.w, player.h);
+
+        // Obstacles
+        for (const ob of obstacles) {
+          ctx.fillStyle = ob.color;
+          ctx.fillRect(ob.x, ob.y, ob.w, ob.h);
+          // subtle top highlight
+          ctx.fillStyle = 'rgba(255,255,255,0.15)';
+          ctx.fillRect(ob.x, ob.y, ob.w, 4);
+        }
+
+        // HUD
+        ctx.fillStyle = '#e8eef8';
+        ctx.font = '16px system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(`Score: ${score}`, 14, 26);
+        ctx.fillText(`High: ${highScore}`, 14, 46);
+
+        // Game Over banner
+        if (gameOver) {
+          ctx.save();
+          ctx.fillStyle = 'rgba(0,0,0,0.5)';
+          ctx.fillRect(0, 0, W, H);
+          ctx.textAlign = 'center';
+          ctx.fillStyle = '#e8eef8';
+          ctx.font = 'bold 32px system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+          ctx.fillText('Game Over', W / 2, H / 2 - 12);
+          ctx.font = '18px system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+          ctx.fillText(`Score: ${score}   High: ${highScore}`, W / 2, H / 2 + 18);
+          ctx.fillText('Press R or click Restart', W / 2, H / 2 + 44);
+          ctx.restore();
+        }
+      }
+
+      function drawSky() {
+        // Simple stars and parallax layers
+        const t = frame * 0.4;
+        ctx.save();
+        // distant layer
+        ctx.globalAlpha = 0.35;
+        ctx.fillStyle = '#8aa7ff';
+        for (let i = 0; i < 30; i++) {
+          const x = (i * 23 + t * 0.02) % W;
+          const y = 40 + (i * 11) % (groundY - 120);
+          ctx.fillRect(x, y, 2, 2);
+        }
+        // mid layer hills
+        ctx.globalAlpha = 0.15;
+        ctx.fillStyle = '#99a7c4';
+        const baseY = groundY - 110;
+        for (let i = -1; i < 8; i++) {
+          const hillX = ((i * 140) - (t * 0.15)) % (W + 160) - 160;
+          drawHill(hillX, baseY, 180, 30);
+        }
+        ctx.restore();
+      }
+
+      function drawHill(x, y, w, h) {
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.quadraticCurveTo(x + w * 0.5, y - h, x + w, y);
+        ctx.lineTo(x + w, H);
+        ctx.lineTo(x, H);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      function loop() {
+        update();
+        draw();
+        requestAnimationFrame(loop);
+      }
+
+      // Input handling
+      window.addEventListener('keydown', (e) => {
+        if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
+          wantsJump = true;
+          e.preventDefault();
+        } else if (e.code === 'KeyR') {
+          resetGame();
+          e.preventDefault();
+        }
+      });
+
+      document.getElementById('restartBtn').addEventListener('click', resetGame);
+      canvas.addEventListener('pointerdown', () => (wantsJump = true));
+
+      // Start
+      resetGame();
+      loop();
+    })();
+  </script>
+</body>
+</html>
