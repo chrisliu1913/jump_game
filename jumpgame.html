@@ -105,7 +105,7 @@
         // Spawn initial obstacles
         let x = W + 120;
         for (let i = 0; i < 3; i++) {
-          const w = 30 + Math.random() * 40;
+          const w = 18 + Math.random() * 30; // narrower blocks (min ~18px)
           const h = 30 + Math.random() * 40;
           obstacles.push({ x, y: groundY - h, w, h, color: '#ff6b6b' });
           x += randomRange(obstacleGapMin, obstacleGapMax);
@@ -117,7 +117,7 @@
       }
 
       function spawnObstacle(lastX) {
-        const w = 28 + Math.random() * 50;
+        const w = 18 + Math.random() * 30; // narrower obstacles for easier jumps
         const h = 24 + Math.random() * 60;
         const gap = randomRange(obstacleGapMin, obstacleGapMax);
         return { x: lastX + gap, y: groundY - h, w, h, color: '#ff6b6b' };
