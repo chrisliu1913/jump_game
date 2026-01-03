@@ -128,8 +128,9 @@
 
         frame++;
 
-        // Difficulty ramp
-        obstacleSpeed += 0.0009; // small acceleration over time
+        // Difficulty ramp — scale speed with score and time so game gets
+        // noticeably faster as more obstacles are cleared.
+        obstacleSpeed = obstacleSpeedStart + score * 0.35 + frame * 0.0009;
 
         // Jump input
         if (wantsJump && player.onGround) {
@@ -176,8 +177,8 @@
           if (!ob.scored && player.x > ob.x + ob.w) {
             ob.scored = true;
             score++;
-            // Slight reward speed bump
-            obstacleSpeed += 0.03;
+            // Give a clear but small speed bump when scoring
+            obstacleSpeed += 0.06;
           }
         }
       }
